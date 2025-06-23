@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Upload, Brain, TrendingUp, Users, ArrowRight, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -9,6 +8,7 @@ import FeatureCard from "@/components/FeatureCard";
 import UploadWizard from "@/components/UploadWizard";
 import Dashboard from "@/components/Dashboard";
 import AuthForm from "@/components/AuthForm";
+import ImpactVisuals from "@/components/ImpactVisuals";
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<'landing' | 'auth' | 'upload' | 'dashboard'>('landing');
@@ -65,6 +65,9 @@ const Index = () => {
           <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
             <div className="container mx-auto px-4 py-8">
               <HeroSection onGetStarted={handleGetStarted} />
+              
+              {/* Impact Visuals Section - NEW */}
+              <ImpactVisuals />
               
               {/* Features Section */}
               <section className="py-20">
