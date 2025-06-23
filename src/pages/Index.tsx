@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Upload, Brain, TrendingUp, Users, ArrowRight, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,10 +11,16 @@ import Dashboard from "@/components/Dashboard";
 import AuthForm from "@/components/AuthForm";
 import ImpactVisuals from "@/components/ImpactVisuals";
 import SampleVisualizations from "@/components/SampleVisualizations";
+import { authService } from "@/services/authService";
 
 const Index = () => {
   const [currentView, setCurrentView] = useState<'landing' | 'auth' | 'upload' | 'dashboard'>('landing');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  useEffect(() => {
+    // Check authentication status on component mount
+    setIsAuthenticated(authService.isAuthenticated());
+  }, []);
 
   const features = [
     {
@@ -54,6 +60,12 @@ const Index = () => {
     setCurrentView('dashboard');
   };
 
+  const handleLogout = () => {
+    authService.logout();
+    setIsAuthenticated(false);
+    setCurrentView('landing');
+  };
+
   const renderCurrentView = () => {
     switch (currentView) {
       case 'auth':
@@ -65,6 +77,20 @@ const Index = () => {
       default:
         return (
           <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+            {/* Add user info bar if authenticated */}
+            {isAuthenticated && (
+              <div className="bg-white/80 backdrop-blur-sm border-b border-gray-200">
+                <div className="container mx-auto px-4 py-2 flex justify-between items-center">
+                  <div className="text-sm text-gray-600">
+                    Welcome back, {authService.getCurrentUser()?.email}
+                  </div>
+                  <Button variant="outline" size="sm" onClick={handleLogout}>
+                    Logout
+                  </Button>
+                </div>
+              </div>
+            )}
+            
             <div className="container mx-auto px-4 py-8">
               <HeroSection onGetStarted={handleGetStarted} />
               

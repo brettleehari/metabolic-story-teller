@@ -1,10 +1,12 @@
-
 import { useState } from "react";
 import { Upload, FileText, Activity, Moon, UtensilsCrossed, ArrowLeft, ArrowRight, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
+import { uploadService } from "@/services/uploadService";
+import { analysisService } from "@/services/analysisService";
+import { useToast } from "@/hooks/use-toast";
 
 interface UploadWizardProps {
   onComplete: () => void;
@@ -13,8 +15,11 @@ interface UploadWizardProps {
 
 const UploadWizard = ({ onComplete, onBack }: UploadWizardProps) => {
   const [currentStep, setCurrentStep] = useState(0);
-  const [uploadedFiles, setUploadedFiles] = useState<Record<string, boolean>>({});
+  const [uploadedFiles, setUploadedFiles] = useState<Record<string, { file_id: string; file: File }>>({});
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingProgress, setProcessingProgress] = useState(0);
+  const [analysisJobId, setAnalysisJobId] = useState<string | null>(null);
+  const { toast } = useToast();
 
   const dataTypes = [
     {
@@ -55,9 +60,46 @@ const UploadWizard = ({ onComplete, onBack }: UploadWizardProps) => {
     }
   ];
 
-  const handleFileUpload = (dataType: string) => {
-    // Simulate file upload
-    setUploadedFiles(prev => ({ ...prev, [dataType]: true }));
+  const handleFileUpload = async (dataType: string, file: File) => {
+    try {
+      const response = await uploadService.uploadFile({
+        file,
+        data_type: dataType as 'glucose' | 'sleep' | 'food' | 'exercise',
+      });
+
+      if (response.success && response.file_id) {
+        setUploadedFiles(prev => ({ 
+          ...prev, 
+          [dataType]: { file_id: response.file_id!, file } 
+        }));
+        
+        toast({
+          title: "File uploaded successfully!",
+          description: `${dataType} data has been processed and validated.`,
+        });
+      } else {
+        throw new Error(response.message || "Upload failed");
+      }
+    } catch (error) {
+      toast({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "Failed to upload file",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleFileSelect = (dataType: string) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.csv';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        handleFileUpload(dataType, file);
+      }
+    };
+    input.click();
   };
 
   const handleNext = () => {
@@ -74,12 +116,48 @@ const UploadWizard = ({ onComplete, onBack }: UploadWizardProps) => {
     }
   };
 
-  const startProcessing = () => {
+  const startProcessing = async () => {
     setIsProcessing(true);
-    // Simulate processing
-    setTimeout(() => {
-      onComplete();
-    }, 3000);
+    setProcessingProgress(0);
+    
+    try {
+      const fileIds = Object.values(uploadedFiles).map(upload => upload.file_id);
+      const response = await analysisService.startAnalysis({ file_ids: fileIds });
+      
+      setAnalysisJobId(response.job_id);
+      
+      // Poll for analysis status
+      const pollInterval = setInterval(async () => {
+        try {
+          const status = await analysisService.getAnalysisStatus(response.job_id);
+          
+          setProcessingProgress(status.progress || 0);
+          
+          if (status.status === 'completed') {
+            clearInterval(pollInterval);
+            toast({
+              title: "Analysis complete!",
+              description: "Your personalized insights are ready.",
+            });
+            onComplete();
+          } else if (status.status === 'failed') {
+            clearInterval(pollInterval);
+            throw new Error(status.message || "Analysis failed");
+          }
+        } catch (error) {
+          clearInterval(pollInterval);
+          throw error;
+        }
+      }, 2000);
+      
+    } catch (error) {
+      setIsProcessing(false);
+      toast({
+        title: "Analysis failed",
+        description: error instanceof Error ? error.message : "Failed to start analysis",
+        variant: "destructive",
+      });
+    }
   };
 
   const currentDataType = dataTypes[currentStep];
@@ -100,13 +178,18 @@ const UploadWizard = ({ onComplete, onBack }: UploadWizardProps) => {
           <CardContent className="space-y-6">
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
-                <span>Statistical Analysis</span>
-                <span>85%</span>
+                <span>Analysis Progress</span>
+                <span>{Math.round(processingProgress)}%</span>
               </div>
-              <Progress value={85} className="h-2" />
+              <Progress value={processingProgress} className="h-2" />
             </div>
+            {analysisJobId && (
+              <div className="text-xs text-gray-500 text-center">
+                Job ID: {analysisJobId}
+              </div>
+            )}
             <div className="text-center text-sm text-gray-600">
-              This may take a few minutes. We'll email you when ready!
+              This may take a few minutes. You'll be redirected when complete.
             </div>
           </CardContent>
         </Card>
@@ -173,18 +256,23 @@ const UploadWizard = ({ onComplete, onBack }: UploadWizardProps) => {
                 <p className="text-sm text-gray-600">{currentDataType.requirements}</p>
               </div>
 
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors cursor-pointer"
-                   onClick={() => handleFileUpload(currentDataType.id)}>
+              <div 
+                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors cursor-pointer"
+                onClick={() => handleFileSelect(currentDataType.id)}
+              >
                 <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600 mb-2">
                   {uploadedFiles[currentDataType.id] 
-                    ? "File uploaded successfully!" 
+                    ? `File uploaded: ${uploadedFiles[currentDataType.id].file.name}` 
                     : "Click to upload CSV file"
                   }
                 </p>
                 <Button 
                   variant={uploadedFiles[currentDataType.id] ? "outline" : "default"}
-                  onClick={() => handleFileUpload(currentDataType.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleFileSelect(currentDataType.id);
+                  }}
                 >
                   {uploadedFiles[currentDataType.id] ? "Re-upload" : "Choose File"}
                 </Button>

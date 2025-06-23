@@ -1,10 +1,11 @@
-
-import { useState } from "react";
+import React, { useState } from "react";
 import { Mail, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { authService } from "@/services/authService";
+import { useToast } from "@/hooks/use-toast";
 
 interface AuthFormProps {
   onSuccess: () => void;
@@ -15,21 +16,65 @@ const AuthForm = ({ onSuccess, onBack }: AuthFormProps) => {
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     
-    // Simulate API call
-    setTimeout(() => {
-      setIsLoading(false);
-      setEmailSent(true);
+    try {
+      const response = await authService.requestMagicLink(email);
       
-      // Simulate magic link click after 3 seconds
-      setTimeout(() => {
+      if (response.success) {
+        setEmailSent(true);
+        toast({
+          title: "Magic link sent!",
+          description: "Check your email and click the link to sign in.",
+        });
+      } else {
+        throw new Error(response.message || "Failed to send magic link");
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to send magic link",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Check URL params for token verification
+  React.useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const token = urlParams.get('token');
+    
+    if (token) {
+      verifyToken(token);
+    }
+  }, []);
+
+  const verifyToken = async (token: string) => {
+    try {
+      const response = await authService.verifyToken(token);
+      
+      if (response.success) {
+        toast({
+          title: "Welcome!",
+          description: "You've been successfully signed in.",
+        });
         onSuccess();
-      }, 3000);
-    }, 1500);
+      } else {
+        throw new Error(response.message || "Invalid or expired token");
+      }
+    } catch (error) {
+      toast({
+        title: "Authentication Error",
+        description: error instanceof Error ? error.message : "Failed to authenticate",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -89,7 +134,7 @@ const AuthForm = ({ onSuccess, onBack }: AuthFormProps) => {
               </form>
             ) : (
               <div className="text-center space-y-6">
-                <div className="animate-pulse">
+                <div>
                   <Badge variant="outline" className="px-4 py-2 text-sm">
                     Magic link sent to {email}
                   </Badge>
@@ -99,9 +144,6 @@ const AuthForm = ({ onSuccess, onBack }: AuthFormProps) => {
                   <p className="text-sm text-gray-600 mb-2">
                     Click the link in your email to sign in instantly
                   </p>
-                  <div className="text-xs text-gray-500">
-                    Demo: Auto-signing you in...
-                  </div>
                 </div>
 
                 <Button 
