@@ -194,6 +194,32 @@ The application is currently **development-ready** with Docker Compose, but **no
 
 **Estimated Time to Production-Ready: 2-3 weeks** (with above fixes + deployment setup)
 
+### 🎯 Quick Demo Deployment (Read-Only)
+
+**Want to showcase GlucoLens without building full features?** Deploy a read-only demo with pre-generated data!
+
+**What's Included:**
+- ✅ 3 demo user profiles with 90 days of synthetic data
+- ✅ Pre-computed ML insights (PCMCI, STUMPY, patterns)
+- ✅ Interactive dashboard (React frontend)
+- ✅ AWS Lambda serverless backend (GET endpoints only)
+- ✅ S3 + CloudFront for global CDN
+- ✅ **Cost: ~$50/month** (optimizable to $15-20)
+- ❌ No user authentication (public demo)
+- ❌ No data upload (read-only)
+
+**Use Cases:**
+- Show to investors/stakeholders
+- User research and feedback
+- Marketing website demo
+- Beta user recruitment
+
+**Deployment Time: 2-3 hours**
+
+📖 **[Complete Guide: DEMO_DEPLOYMENT_AWS_LAMBDA.md](DEMO_DEPLOYMENT_AWS_LAMBDA.md)**
+
+---
+
 ### Recommended Development Workflow
 
 #### 1. **Feature Branch Strategy**
@@ -360,9 +386,21 @@ AWS Lambda / Google Cloud Functions
 
 ## 📚 Documentation
 
-- [Backend Architecture](backend_architecture.md) - Complete technical design
-- [Backend README](backend/README.md) - API documentation & development guide
-- [API Docs (Interactive)](http://localhost:8000/docs) - Swagger UI
+### Core Documentation
+- **[CLAUDE.md](CLAUDE.md)** - AI assistant guide for working on the codebase
+- **[Backend Architecture](backend_architecture.md)** - Complete technical design
+- **[Backend README](backend/README.md)** - API documentation & development guide
+- **[API Docs (Interactive)](http://localhost:8000/docs)** - Swagger UI
+
+### Deployment Guides
+- **[DEMO_DEPLOYMENT_AWS_LAMBDA.md](DEMO_DEPLOYMENT_AWS_LAMBDA.md)** - 🎯 Read-only demo deployment (AWS Lambda)
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Full production deployment (Docker Compose, Kubernetes, Serverless)
+- **[DEVELOPMENT_WORKFLOW.md](DEVELOPMENT_WORKFLOW.md)** - Development best practices & workflow
+
+### Additional Resources
+- **[FRONTEND_INTEGRATION.md](FRONTEND_INTEGRATION.md)** - Frontend integration guide
+- **[ML_PIPELINE_EXECUTION_GUIDE.md](ML_PIPELINE_EXECUTION_GUIDE.md)** - ML pipeline documentation
+- **[MVP2_PLAN.md](MVP2_PLAN.md)** - Roadmap and features
 
 ---
 
