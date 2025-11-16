@@ -388,6 +388,7 @@ AWS Lambda / Google Cloud Functions
 
 ### Core Documentation
 - **[CLAUDE.md](CLAUDE.md)** - AI assistant guide for working on the codebase
+- **[ARCHITECTURE_DIAGRAMS.md](ARCHITECTURE_DIAGRAMS.md)** - 🎨 Mermaid diagrams (system, components, data flow, deployment)
 - **[Backend Architecture](backend_architecture.md)** - Complete technical design
 - **[Backend README](backend/README.md)** - API documentation & development guide
 - **[API Docs (Interactive)](http://localhost:8000/docs)** - Swagger UI
