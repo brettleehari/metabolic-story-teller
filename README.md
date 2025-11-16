@@ -200,10 +200,14 @@ The application is currently **development-ready** with Docker Compose, but **no
 
 **What's Included:**
 - ✅ 3 demo user profiles with 90 days of synthetic data
-- ✅ Pre-computed ML insights (PCMCI, STUMPY, patterns)
-- ✅ Interactive dashboard (React frontend)
+  - Alice Thompson (Well-controlled, 85% time in range)
+  - Bob Martinez (Variable, 60% time in range)
+  - Carol Chen (Active lifestyle, 75% time in range)
+- ✅ Pre-computed ML insights (PCMCI causal discovery, STUMPY pattern detection, association rules)
+- ✅ Interactive demo dashboard (React frontend with profile selection)
 - ✅ AWS Lambda serverless backend (GET endpoints only)
 - ✅ S3 + CloudFront for global CDN
+- ✅ GitHub Actions CI/CD workflow for automated deployment
 - ✅ **Cost: ~$50/month** (optimizable to $15-20)
 - ❌ No user authentication (public demo)
 - ❌ No data upload (read-only)
@@ -216,7 +220,22 @@ The application is currently **development-ready** with Docker Compose, but **no
 
 **Deployment Time: 2-3 hours**
 
-📖 **[Complete Guide: DEMO_DEPLOYMENT_AWS_LAMBDA.md](DEMO_DEPLOYMENT_AWS_LAMBDA.md)**
+**Quick Links:**
+- ⚡ **[Quick Start Guide](QUICKSTART_DEMO.md)** - Get started in 2-3 hours
+- ✅ **[Deployment Checklist](AWS_DEPLOYMENT_CHECKLIST.md)** - Step-by-step verification
+- 📖 **[Complete Guide](DEMO_DEPLOYMENT_AWS_LAMBDA.md)** - Full architecture & setup
+- 🎨 **[Architecture Diagram](ARCHITECTURE_DIAGRAMS.md#92-aws-lambda-read-only-demo-deployment)** - Visual deployment architecture
+
+**Key Files Created:**
+- `backend/app/lambda_handler.py` - Lambda function with Mangum integration
+- `backend/template.yaml` - AWS SAM infrastructure template
+- `backend/scripts/generate_demo_users.py` - Demo data generation
+- `backend/scripts/deploy_demo.sh` - Automated deployment script
+- `backend/scripts/validate_deployment.sh` - Health check & validation
+- `src/config/demo.ts` - Demo mode configuration
+- `src/pages/DemoIndex.tsx` - Demo profile selection page
+- `src/pages/DemoDashboard.tsx` - Read-only dashboard component
+- `.github/workflows/deploy-aws-demo.yml` - CI/CD pipeline
 
 ---
 
@@ -394,7 +413,9 @@ AWS Lambda / Google Cloud Functions
 - **[API Docs (Interactive)](http://localhost:8000/docs)** - Swagger UI
 
 ### Deployment Guides
-- **[DEMO_DEPLOYMENT_AWS_LAMBDA.md](DEMO_DEPLOYMENT_AWS_LAMBDA.md)** - 🎯 Read-only demo deployment (AWS Lambda)
+- **[QUICKSTART_DEMO.md](QUICKSTART_DEMO.md)** - ⚡ Quick Start: Deploy demo in 2-3 hours
+- **[AWS_DEPLOYMENT_CHECKLIST.md](AWS_DEPLOYMENT_CHECKLIST.md)** - ✅ Step-by-step deployment checklist
+- **[DEMO_DEPLOYMENT_AWS_LAMBDA.md](DEMO_DEPLOYMENT_AWS_LAMBDA.md)** - 🎯 Read-only demo deployment guide (AWS Lambda)
 - **[DEPLOYMENT.md](DEPLOYMENT.md)** - Full production deployment (Docker Compose, Kubernetes, Serverless)
 - **[DEVELOPMENT_WORKFLOW.md](DEVELOPMENT_WORKFLOW.md)** - Development best practices & workflow
 

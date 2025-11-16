@@ -1,0 +1,338 @@
+# GitHub Actions Workflow for AWS Lambda Demo Deployment
+# Deploys GlucoLens read-only demo to AWS (Lambda + S3 + CloudFront)
+
+name: Deploy AWS Lambda Demo
+
+on:
+  push:
+    branches:
+      - main
+      - demo-deploy
+    paths:
+      - 'backend/**'
+      - 'src/**'
+      - '.github/workflows/deploy-aws-demo.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'demo'
+        type: choice
+        options:
+          - demo
+          - staging
+          - production
+
+env:
+  AWS_REGION: us-east-1
+  STACK_NAME: glucolens-demo
+  PYTHON_VERSION: '3.11'
+  NODE_VERSION: '18'
+
+jobs:
+  # Job 1: Build and test
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    outputs:
+      frontend-artifact: ${{ steps.upload-frontend.outputs.artifact-id }}
+      backend-artifact: ${{ steps.upload-backend.outputs.artifact-id }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: |
+          pip install -r requirements-lambda.txt
+          pip install pytest pytest-asyncio
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Lint frontend
+        run: npm run lint
+
+      - name: Type check frontend
+        run: npx tsc --noEmit
+
+      - name: Build frontend for demo
+        env:
+          VITE_DEMO_MODE: 'true'
+          VITE_DEMO_API_URL: ${{ secrets.AWS_API_GATEWAY_URL }}
+        run: npm run build
+
+      - name: Upload frontend build artifact
+        id: upload-frontend
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist/
+          retention-days: 7
+
+      - name: Upload backend code artifact
+        id: upload-backend
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-code
+          path: backend/
+          retention-days: 7
+
+  # Job 2: Deploy backend to AWS Lambda
+  deploy-backend:
+    name: Deploy Backend to Lambda
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: ${{ github.event.inputs.environment || 'demo' }}
+
+    steps:
+      - name: Download backend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-code
+          path: backend/
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install AWS SAM CLI
+        uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build SAM application
+        working-directory: ./backend
+        run: sam build --use-container
+
+      - name: Deploy SAM application
+        working-directory: ./backend
+        run: |
+          sam deploy \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --stack-name ${{ env.STACK_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --capabilities CAPABILITY_IAM \
+            --parameter-overrides \
+              DBEndpoint=${{ secrets.AWS_DB_ENDPOINT }} \
+              DBName=${{ secrets.AWS_DB_NAME }} \
+              DBUsername=${{ secrets.AWS_DB_USERNAME }} \
+              DBPassword=${{ secrets.AWS_DB_PASSWORD }}
+
+      - name: Get API Gateway URL
+        id: get-api-url
+        run: |
+          API_URL=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query 'Stacks[0].Outputs[?OutputKey==`ApiUrl`].OutputValue' \
+            --output text \
+            --region ${{ env.AWS_REGION }})
+          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+          echo "Deployed API URL: $API_URL"
+
+      - name: Save API URL as artifact
+        run: |
+          mkdir -p deploy-info
+          echo "${{ steps.get-api-url.outputs.api_url }}" > deploy-info/api_url.txt
+
+      - name: Upload deployment info
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-info
+          path: deploy-info/
+          retention-days: 30
+
+  # Job 3: Generate demo data
+  generate-demo-data:
+    name: Generate Demo Data
+    runs-on: ubuntu-latest
+    needs: deploy-backend
+    environment:
+      name: ${{ github.event.inputs.environment || 'demo' }}
+
+    steps:
+      - name: Download backend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: backend-code
+          path: backend/
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        working-directory: ./backend
+        run: |
+          pip install -r requirements-lambda.txt
+          pip install asyncpg sqlalchemy[asyncio]
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Run demo data generation
+        working-directory: ./backend
+        env:
+          DATABASE_URL: postgresql+asyncpg://${{ secrets.AWS_DB_USERNAME }}:${{ secrets.AWS_DB_PASSWORD }}@${{ secrets.AWS_DB_ENDPOINT }}:5432/${{ secrets.AWS_DB_NAME }}
+        run: python scripts/generate_demo_users.py
+
+  # Job 4: Deploy frontend to S3 and CloudFront
+  deploy-frontend:
+    name: Deploy Frontend to S3
+    runs-on: ubuntu-latest
+    needs: [build, generate-demo-data]
+    environment:
+      name: ${{ github.event.inputs.environment || 'demo' }}
+
+    steps:
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: dist/
+
+      - name: Download deployment info
+        uses: actions/download-artifact@v4
+        with:
+          name: deploy-info
+          path: deploy-info/
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sync to S3
+        run: |
+          aws s3 sync dist/ s3://${{ secrets.AWS_S3_BUCKET }}/ \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable" \
+            --exclude "*.html" \
+            --exclude "*.json"
+
+          # Upload HTML and JSON with no-cache
+          aws s3 sync dist/ s3://${{ secrets.AWS_S3_BUCKET }}/ \
+            --cache-control "no-cache" \
+            --exclude "*" \
+            --include "*.html" \
+            --include "*.json"
+
+      - name: Invalidate CloudFront cache
+        if: ${{ secrets.AWS_CLOUDFRONT_DISTRIBUTION_ID != '' }}
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.AWS_CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"
+
+      - name: Output deployment URLs
+        run: |
+          API_URL=$(cat deploy-info/api_url.txt)
+          echo "::notice title=API Deployed::$API_URL"
+
+          if [ -n "${{ secrets.AWS_CLOUDFRONT_DOMAIN }}" ]; then
+            echo "::notice title=Frontend Deployed::https://${{ secrets.AWS_CLOUDFRONT_DOMAIN }}"
+          else
+            echo "::notice title=Frontend Deployed::http://${{ secrets.AWS_S3_BUCKET }}.s3-website-${{ env.AWS_REGION }}.amazonaws.com"
+          fi
+
+  # Job 5: Health check and smoke tests
+  health-check:
+    name: Health Check
+    runs-on: ubuntu-latest
+    needs: [deploy-backend, deploy-frontend]
+
+    steps:
+      - name: Download deployment info
+        uses: actions/download-artifact@v4
+        with:
+          name: deploy-info
+          path: deploy-info/
+
+      - name: Test API health
+        run: |
+          API_URL=$(cat deploy-info/api_url.txt)
+
+          echo "Testing API health at: $API_URL"
+
+          # Test root endpoint
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/")
+          if [ $HTTP_CODE -eq 200 ]; then
+            echo "✅ API health check passed"
+          else
+            echo "❌ API health check failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+          # Test users endpoint
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/users")
+          if [ $HTTP_CODE -eq 200 ]; then
+            echo "✅ Users endpoint check passed"
+          else
+            echo "❌ Users endpoint check failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+      - name: Test demo user data
+        run: |
+          API_URL=$(cat deploy-info/api_url.txt)
+
+          # Test Alice's dashboard
+          ALICE_ID="11111111-1111-1111-1111-111111111111"
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL/dashboard/$ALICE_ID")
+
+          if [ $HTTP_CODE -eq 200 ]; then
+            echo "✅ Demo user dashboard check passed"
+          else
+            echo "❌ Demo user dashboard check failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+
+      - name: Deployment summary
+        run: |
+          API_URL=$(cat deploy-info/api_url.txt)
+
+          echo "🎉 Deployment completed successfully!"
+          echo ""
+          echo "📊 Demo URLs:"
+          echo "  API: $API_URL"
+          if [ -n "${{ secrets.AWS_CLOUDFRONT_DOMAIN }}" ]; then
+            echo "  Frontend: https://${{ secrets.AWS_CLOUDFRONT_DOMAIN }}"
+          else
+            echo "  Frontend: http://${{ secrets.AWS_S3_BUCKET }}.s3-website-${{ env.AWS_REGION }}.amazonaws.com"
+          fi
+          echo ""
+          echo "👥 Demo Users:"
+          echo "  - Alice Thompson (Well-controlled)"
+          echo "  - Bob Martinez (Variable)"
+          echo "  - Carol Chen (Active)"

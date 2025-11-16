@@ -804,65 +804,138 @@ graph TB
     style REDIS_SVC fill:#dc382d
 ```
 
-### 9.2 AWS Lambda (Demo Deployment)
+### 9.2 AWS Lambda (Read-Only Demo Deployment)
+
+**Purpose:** Serverless read-only demo with pre-loaded data (3 demo users, 90 days of synthetic data)
+
+**Key Features:**
+- No authentication required (demo mode)
+- GET endpoints only (read-only)
+- Pre-computed ML insights (PCMCI, STUMPY, association rules)
+- Global CDN distribution via CloudFront
+- Auto-scaling with Lambda
+- Cost: ~$50/month (optimizable to $15-20)
 
 ```mermaid
 graph TB
+    subgraph "Users"
+        BROWSER[Web Browser]
+    end
+
     subgraph "AWS Cloud"
-        subgraph "Edge"
-            CF[CloudFront CDN<br/>Global Distribution]
+        subgraph "Edge Layer - Global CDN"
+            CF[CloudFront Distribution<br/>SSL, Caching, Compression]
         end
 
-        subgraph "Static Assets"
-            S3[S3 Bucket<br/>React Build]
+        subgraph "Static Assets - S3"
+            S3[S3 Bucket<br/>React Demo Frontend<br/>DemoIndex + DemoDashboard]
         end
 
-        subgraph "API Layer"
-            APIGW[API Gateway<br/>REST API]
+        subgraph "API Layer - API Gateway"
+            APIGW[API Gateway REST API<br/>CORS Enabled<br/>/Prod Stage]
         end
 
-        subgraph "Compute"
-            L1[Lambda: Get Insights]
-            L2[Lambda: Get Correlations]
-            L3[Lambda: Get Patterns]
-            L4[Lambda: Get Dashboard]
-            L5[Lambda: Get Glucose]
+        subgraph "Compute Layer - Lambda Functions"
+            LF[Lambda Function<br/>glucolens-demo-DemoFunction<br/>512MB, 30s timeout<br/>Mangum Handler]
         end
 
-        subgraph "VPC"
-            subgraph "Database"
-                AURORA[(Aurora Serverless v2<br/>PostgreSQL)]
+        subgraph "Endpoints Handled by Lambda"
+            E1[GET /users]
+            E2[GET /insights/:userId]
+            E3[GET /correlations/:userId]
+            E4[GET /patterns/:userId]
+            E5[GET /dashboard/:userId]
+            E6[GET /glucose/readings/:userId]
+        end
+
+        subgraph "VPC - Database Tier"
+            subgraph "Aurora Cluster"
+                AURORA[(Aurora Serverless v2<br/>PostgreSQL + TimescaleDB<br/>0.5-1 ACU, Auto-pause)]
             end
         end
 
-        subgraph "Monitoring"
-            CW[CloudWatch<br/>Logs & Metrics]
+        subgraph "Monitoring & Logging"
+            CW[CloudWatch Logs<br/>7-day retention]
+            ALARM1[Error Alarm<br/>> 5 errors/5min]
+            ALARM2[Throttle Alarm<br/>> 10 throttles/5min]
+        end
+
+        subgraph "Infrastructure as Code"
+            SAM[AWS SAM Template<br/>template.yaml]
+            GHA[GitHub Actions<br/>CI/CD Pipeline]
+        end
+
+        subgraph "Demo Data - 3 Profiles"
+            ALICE[Alice Thompson<br/>11111111...<br/>Well-controlled]
+            BOB[Bob Martinez<br/>22222222...<br/>Variable]
+            CAROL[Carol Chen<br/>33333333...<br/>Active]
         end
     end
 
-    USER[Users] --> CF
+    BROWSER --> CF
     CF --> S3
     CF --> APIGW
-    APIGW --> L1
-    APIGW --> L2
-    APIGW --> L3
-    APIGW --> L4
-    APIGW --> L5
-    L1 --> AURORA
-    L2 --> AURORA
-    L3 --> AURORA
-    L4 --> AURORA
-    L5 --> AURORA
-    L1 --> CW
-    L2 --> CW
-    L3 --> CW
+    S3 -.->|Contains| DemoIndex
+    S3 -.->|Contains| DemoDashboard
 
-    style CF fill:#ff9900
-    style S3 fill:#ff9900
-    style APIGW fill:#ff9900
-    style L1 fill:#ff9900
-    style AURORA fill:#336791
+    APIGW --> LF
+    LF --> E1
+    LF --> E2
+    LF --> E3
+    LF --> E4
+    LF --> E5
+    LF --> E6
+
+    E1 --> AURORA
+    E2 --> AURORA
+    E3 --> AURORA
+    E4 --> AURORA
+    E5 --> AURORA
+    E6 --> AURORA
+
+    AURORA -.->|Contains| ALICE
+    AURORA -.->|Contains| BOB
+    AURORA -.->|Contains| CAROL
+
+    LF --> CW
+    CW --> ALARM1
+    CW --> ALARM2
+
+    SAM -.->|Deploys| APIGW
+    SAM -.->|Deploys| LF
+    SAM -.->|Deploys| CW
+    GHA -.->|Executes| SAM
+
+    style CF fill:#ff9900,stroke:#333,stroke-width:2px
+    style S3 fill:#ff9900,stroke:#333,stroke-width:2px
+    style APIGW fill:#ff9900,stroke:#333,stroke-width:2px
+    style LF fill:#ff9900,stroke:#333,stroke-width:2px
+    style AURORA fill:#336791,stroke:#333,stroke-width:2px
+    style CW fill:#ff9900,stroke:#333,stroke-width:2px
+    style ALICE fill:#4caf50,stroke:#333,stroke-width:2px
+    style BOB fill:#ff9800,stroke:#333,stroke-width:2px
+    style CAROL fill:#2196f3,stroke:#333,stroke-width:2px
 ```
+
+**Data Flow:**
+1. User visits demo URL (CloudFront)
+2. CloudFront serves React frontend from S3
+3. User selects demo profile (Alice/Bob/Carol)
+4. Frontend calls API Gateway endpoints
+5. API Gateway triggers Lambda function
+6. Lambda queries Aurora Serverless for demo data
+7. Pre-computed insights returned to frontend
+8. Dashboard renders with charts and visualizations
+
+**Deployment Steps:**
+1. `sam build --use-container` (Build Lambda package)
+2. `sam deploy` (Deploy infrastructure)
+3. `python scripts/generate_demo_users.py` (Generate demo data)
+4. `npm run build` (Build frontend with `VITE_DEMO_MODE=true`)
+5. `aws s3 sync dist/ s3://bucket/` (Deploy frontend)
+6. `aws cloudfront create-invalidation` (Clear CDN cache)
+
+See `AWS_DEPLOYMENT_CHECKLIST.md` for full deployment guide.
 
 ### 9.3 Kubernetes (Production Scale)
 
