@@ -1,0 +1,251 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  GlucoLens Demo - Read-Only API
+
+  Serverless deployment with AWS Lambda, API Gateway, and Aurora Serverless v2
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: python3.11
+    Architectures:
+      - x86_64
+    Environment:
+      Variables:
+        # Database connection - Update these after database creation
+        DATABASE_URL: !Sub 'postgresql+asyncpg://${DBUsername}:${DBPassword}@${DBEndpoint}:5432/${DBName}'
+        ENVIRONMENT: production
+        LOG_LEVEL: INFO
+
+Parameters:
+  DBEndpoint:
+    Type: String
+    Description: Aurora database endpoint
+    Default: PLACEHOLDER_DB_ENDPOINT
+
+  DBName:
+    Type: String
+    Description: Database name
+    Default: glucolens
+
+  DBUsername:
+    Type: String
+    Description: Database username
+    Default: glucolens
+    NoEcho: true
+
+  DBPassword:
+    Type: String
+    Description: Database password
+    NoEcho: true
+    Default: PLACEHOLDER_DB_PASSWORD
+
+  Environment:
+    Type: String
+    Description: Deployment environment
+    Default: demo
+    AllowedValues:
+      - demo
+      - production
+
+Resources:
+  # API Gateway
+  GlucoLensAPI:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub 'glucolens-demo-api-${Environment}'
+      StageName: !Ref Environment
+      Cors:
+        AllowOrigin: "'*'"  # TODO: Restrict to CloudFront domain
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowMethods: "'GET,OPTIONS'"
+        MaxAge: "'600'"
+      EndpointConfiguration:
+        Type: REGIONAL
+      TracingEnabled: true
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+
+  # Main Lambda Function
+  GlucoLensFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'glucolens-demo-${Environment}'
+      CodeUri: ./
+      Handler: app.lambda_handler.handler
+      Description: GlucoLens Demo Read-Only API
+      Events:
+        # Root endpoint
+        Root:
+          Type: Api
+          Properties:
+            RestApiId: !Ref GlucoLensAPI
+            Path: /
+            Method: GET
+
+        # Health check
+        Health:
+          Type: Api
+          Properties:
+            RestApiId: !Ref GlucoLensAPI
+            Path: /health
+            Method: GET
+
+        # API Documentation
+        Docs:
+          Type: Api
+          Properties:
+            RestApiId: !Ref GlucoLensAPI
+            Path: /docs
+            Method: GET
+
+        # Users endpoint
+        GetUsers:
+          Type: Api
+          Properties:
+            RestApiId: !Ref GlucoLensAPI
+            Path: /users
+            Method: GET
+
+        # Insights endpoints
+        GetInsights:
+          Type: Api
+          Properties:
+            RestApiId: !Ref GlucoLensAPI
+            Path: /insights/{user_id}
+            Method: GET
+
+        GetCorrelations:
+          Type: Api
+          Properties:
+            RestApiId: !Ref GlucoLensAPI
+            Path: /correlations/{user_id}
+            Method: GET
+
+        GetPatterns:
+          Type: Api
+          Properties:
+            RestApiId: !Ref GlucoLensAPI
+            Path: /patterns/{user_id}
+            Method: GET
+
+        GetDashboard:
+          Type: Api
+          Properties:
+            RestApiId: !Ref GlucoLensAPI
+            Path: /dashboard/{user_id}
+            Method: GET
+
+        # Glucose readings
+        GetGlucoseReadings:
+          Type: Api
+          Properties:
+            RestApiId: !Ref GlucoLensAPI
+            Path: /glucose/readings/{user_id}
+            Method: GET
+
+        # Catch-all for other paths (for FastAPI routing)
+        ProxyPath:
+          Type: Api
+          Properties:
+            RestApiId: !Ref GlucoLensAPI
+            Path: /{proxy+}
+            Method: ANY
+
+      # VPC Configuration (if database is in VPC)
+      # Uncomment and configure after VPC setup
+      # VpcConfig:
+      #   SecurityGroupIds:
+      #     - !Ref LambdaSecurityGroup
+      #   SubnetIds:
+      #     - !Ref PrivateSubnet1
+      #     - !Ref PrivateSubnet2
+
+      # Permissions
+      Policies:
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+            - Effect: Allow
+              Action:
+                - xray:PutTraceSegments
+                - xray:PutTelemetryRecords
+              Resource: '*'
+
+      # Enable X-Ray tracing
+      Tracing: Active
+
+      # Environment-specific configuration
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+
+  # Lambda Log Group
+  GlucoLensFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${GlucoLensFunction}'
+      RetentionInDays: 7  # Keep logs for 7 days in demo
+
+  # CloudWatch Alarms
+  FunctionErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'glucolens-demo-errors-${Environment}'
+      AlarmDescription: Alert when Lambda function has errors
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GlucoLensFunction
+
+  FunctionThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'glucolens-demo-throttles-${Environment}'
+      AlarmDescription: Alert when Lambda function is throttled
+      MetricName: Throttles
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref GlucoLensFunction
+
+Outputs:
+  ApiUrl:
+    Description: API Gateway endpoint URL
+    Value: !Sub 'https://${GlucoLensAPI}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/'
+    Export:
+      Name: !Sub 'GlucoLensApiUrl-${Environment}'
+
+  FunctionArn:
+    Description: Lambda Function ARN
+    Value: !GetAtt GlucoLensFunction.Arn
+    Export:
+      Name: !Sub 'GlucoLensFunctionArn-${Environment}'
+
+  FunctionName:
+    Description: Lambda Function Name
+    Value: !Ref GlucoLensFunction
+    Export:
+      Name: !Sub 'GlucoLensFunctionName-${Environment}'
