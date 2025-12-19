@@ -1,7 +1,7 @@
 """Sleep data schemas."""
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime, date
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 
 
@@ -38,3 +38,9 @@ class SleepDataResponse(BaseModel):
     quality_score: Optional[float]
     source: Optional[str]
     created_at: datetime
+
+
+class SleepBulkUpload(BaseModel):
+    """Schema for bulk uploading sleep data."""
+
+    sleep_records: List[SleepDataCreate] = Field(..., max_length=10000)
