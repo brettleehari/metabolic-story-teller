@@ -1,4 +1,5 @@
-FROM python:3.11-slim
+# Pin to specific Python version for reproducible builds
+FROM python:3.11.7-slim
 
 # Set working directory
 WORKDIR /app

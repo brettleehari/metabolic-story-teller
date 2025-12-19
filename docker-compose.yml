@@ -2,7 +2,8 @@ version: '3.8'
 
 services:
   timescaledb:
-    image: timescale/timescaledb:latest-pg15
+    # Pin to specific version for reproducible deployments
+    image: timescale/timescaledb:2.13.0-pg15
     container_name: glucolens-timescaledb
     environment:
       POSTGRES_DB: glucolens
@@ -20,7 +21,8 @@ services:
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    # Pin to specific version for reproducible deployments
+    image: redis:7.2.3-alpine
     container_name: glucolens-redis
     ports:
       - "6379:6379"
