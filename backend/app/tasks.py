@@ -2,7 +2,7 @@
 from celery import Celery
 from celery.schedules import crontab
 from datetime import datetime, timedelta, date
-from typing import List
+from typing import List, Optional
 import pandas as pd
 import numpy as np
 from uuid import UUID
@@ -45,7 +45,7 @@ celery_app.conf.beat_schedule = {
 # ==================== DATA AGGREGATION ====================
 
 @celery_app.task
-def aggregate_daily_data(user_id: str, target_date: str = None):
+def aggregate_daily_data(user_id: str, target_date: Optional[str] = None):
     """
     Aggregate daily statistics for a user.
 

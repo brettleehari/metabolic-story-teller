@@ -4,7 +4,7 @@ PCMCI Causal Discovery Service
 Uses the Tigramite library for causal discovery in time-series data.
 Discovers causal relationships like "sleep yesterday -> glucose today".
 """
-from typing import Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Tuple, Optional
 import pandas as pd
 import numpy as np
 from datetime import datetime
@@ -43,7 +43,7 @@ class PCMCIAnalyzer:
         data: pd.DataFrame,
         variables: List[str],
         min_data_points: int = 30
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Perform PCMCI causal discovery analysis.
 
@@ -126,7 +126,7 @@ class PCMCIAnalyzer:
         self,
         data: pd.DataFrame,
         variables: List[str]
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Fallback method using simple correlation with time lags.
 
