@@ -1,7 +1,7 @@
 """Activity schemas."""
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 
 
@@ -32,3 +32,9 @@ class ActivityResponse(BaseModel):
     heart_rate_avg: Optional[int]
     source: Optional[str]
     created_at: datetime
+
+
+class ActivityBulkUpload(BaseModel):
+    """Schema for bulk uploading activities."""
+
+    activities: List[ActivityCreate] = Field(..., max_length=10000)

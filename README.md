@@ -4,6 +4,12 @@
 
 GlucoLens is a comprehensive health monitoring system that combines continuous glucose monitoring (CGM) data with lifestyle factors (sleep, exercise, meals) to discover personalized patterns and correlations using machine learning.
 
+## 🚀 One-Click Deploy
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/brettleehari/metabolic-story-teller)
+
+**Deploy to Render.com in 3 minutes** - Free tier includes FastAPI backend, React frontend, PostgreSQL, Redis, and Celery workers. [Full deployment guide →](./DEPLOY_TO_RENDER.md)
+
 ---
 
 ## 🎯 Implementation Status

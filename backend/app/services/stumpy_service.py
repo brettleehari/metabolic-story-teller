@@ -4,7 +4,7 @@ STUMPY Pattern Detection Service
 Uses matrix profile (STUMPY library) for discovering recurring patterns
 and anomalies in glucose time-series data.
 """
-from typing import Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Tuple, Optional
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -42,7 +42,7 @@ class StumpyPatternDetector:
         glucose_series: pd.Series,
         reading_interval_minutes: int = 5,
         top_k: int = 3
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Detect recurring patterns (motifs) in glucose data.
 
@@ -142,7 +142,7 @@ class StumpyPatternDetector:
         glucose_series: pd.Series,
         reading_interval_minutes: int = 5,
         top_k: int = 5
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Detect anomalous patterns (discords) in glucose data.
 
@@ -220,7 +220,7 @@ class StumpyPatternDetector:
         glucose_series: pd.Series,
         window_size: int,
         top_k: int
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Fallback pattern detection using simple correlation.
 
@@ -235,7 +235,7 @@ class StumpyPatternDetector:
         values = glucose_series.values
 
         # Find similar windows using correlation
-        patterns = []
+        patterns: List[Dict[str, Any]] = []
 
         # Compare each window with all others
         num_windows = len(values) - window_size + 1
@@ -283,7 +283,7 @@ class StumpyPatternDetector:
         glucose_series: pd.Series,
         window_size: int,
         top_k: int
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Fallback anomaly detection using statistical methods.
 
@@ -333,7 +333,7 @@ class StumpyPatternDetector:
         target_date: datetime,
         reading_interval_minutes: int = 5,
         top_k: int = 5
-    ) -> Dict[str, any]:
+    ) -> Dict[str, Any]:
         """
         Find days with similar glucose patterns to a target date.
 

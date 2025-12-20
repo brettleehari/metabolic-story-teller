@@ -1,7 +1,7 @@
 """Meal schemas."""
 from pydantic import BaseModel, Field, ConfigDict
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 
 
@@ -38,3 +38,9 @@ class MealResponse(BaseModel):
     photo_url: Optional[str]
     source: Optional[str]
     created_at: datetime
+
+
+class MealBulkUpload(BaseModel):
+    """Schema for bulk uploading meals."""
+
+    meals: List[MealCreate] = Field(..., max_length=10000)

@@ -1,0 +1,133 @@
+# Dependabot configuration for GlucoLens
+# Manages dependencies for Python, Docker, and npm/JavaScript
+
+version: 2
+updates:
+  # Python dependencies (backend)
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "brettleehari"
+    labels:
+      - "dependencies"
+      - "python"
+      - "backend"
+    # Group minor and patch updates together
+    groups:
+      fastapi-ecosystem:
+        patterns:
+          - "fastapi*"
+          - "pydantic*"
+          - "uvicorn*"
+          - "starlette*"
+      sqlalchemy-ecosystem:
+        patterns:
+          - "sqlalchemy*"
+          - "alembic*"
+          - "asyncpg*"
+          - "psycopg2*"
+      ml-libraries:
+        patterns:
+          - "numpy*"
+          - "pandas*"
+          - "scikit-learn*"
+          - "tigramite*"
+          - "stumpy*"
+          - "mlxtend*"
+      celery-ecosystem:
+        patterns:
+          - "celery*"
+          - "redis*"
+          - "kombu*"
+    # Ignore major version updates for stable packages
+    ignore:
+      - dependency-name: "sqlalchemy"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-major"]
+
+  # Docker dependencies
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "brettleehari"
+    labels:
+      - "dependencies"
+      - "docker"
+    # Only update patch versions for production images
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+      - dependency-name: "postgres"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "redis"
+        update-types: ["version-update:semver-major"]
+
+  # npm dependencies (frontend)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "brettleehari"
+    labels:
+      - "dependencies"
+      - "npm"
+      - "frontend"
+    # Group related packages
+    groups:
+      react-ecosystem:
+        patterns:
+          - "react*"
+          - "@types/react*"
+      vite-ecosystem:
+        patterns:
+          - "vite*"
+          - "@vitejs/*"
+      shadcn-ui:
+        patterns:
+          - "@radix-ui/*"
+          - "class-variance-authority"
+          - "clsx"
+          - "tailwind-merge"
+      typescript:
+        patterns:
+          - "typescript"
+          - "@types/*"
+    # Ignore major updates for core frameworks
+    ignore:
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+    open-pull-requests-limit: 2
+    reviewers:
+      - "brettleehari"
+    labels:
+      - "dependencies"
+      - "github-actions"

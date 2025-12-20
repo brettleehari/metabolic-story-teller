@@ -1,0 +1,41 @@
+# Bandit Configuration for GlucoLens Backend
+# Security-focused static analysis to find common security issues
+
+[bandit]
+# Paths to scan
+targets: app/
+
+# Paths to exclude
+exclude_dirs:
+    /venv/
+    /.venv/
+    /migrations/
+    /tests/
+    /scripts/
+
+# Test IDs to skip
+# B101: assert_used (used in tests and validation)
+# B601: paramiko_calls (not using paramiko)
+# B603: subprocess_without_shell_equals_true (safe usage)
+skips: B101
+
+# Severity level (LOW, MEDIUM, HIGH)
+level: MEDIUM
+
+# Confidence level (LOW, MEDIUM, HIGH)
+confidence: MEDIUM
+
+# Tests to run (or exclude with '-')
+# tests:
+
+# Output format (csv, html, json, screen, txt, xml, yaml)
+format: screen
+
+# Show verbose output
+verbose: True
+
+# Aggregate results
+aggregate: file
+
+# Number of lines of context to show
+context_lines: 3
