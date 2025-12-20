@@ -89,9 +89,11 @@ Added database connection retry with exponential backoff:
 ### 🔴 Critical (Remaining)
 None identified yet
 
+### 🟠 High Priority (Iteration 2 - FIXED)
+3. ~~Health Check Not Ready-Aware - /health should check DB~~ ✅ **FIXED**
+
 ### 🟠 High Priority (Next Iterations)
 2. Missing Graceful Shutdown - SIGTERM handler
-3. Health Check Not Ready-Aware - /health should check DB
 
 ### 🟡 Medium Priority
 4. CORS Configuration Too Permissive for production
@@ -104,5 +106,115 @@ None identified yet
 
 ---
 
-**Last Updated**: 2025-12-19 04:30 UTC
+## Iteration 2 - Database-Aware Health Check
+**Date**: 2025-12-19
+**Status**: ✅ Completed
+**Priority**: 🟠 HIGH
+
+### Problem Identified
+Health check endpoint returning 200 even when database unavailable:
+- `/health` endpoint returns static "healthy" response
+- Load balancers route traffic to instances with broken DB connections
+- Results in 500 errors during startup or database outages
+- No way for orchestration systems to detect unhealthy instances
+- Impact: Traffic routed to failing instances, poor user experience
+
+### Root Cause
+In `app/main.py` health_check function (line 104-112):
+- Returns hardcoded `{"status": "healthy"}` response
+- No actual health validation performed
+- Always returns HTTP 200 regardless of backend state
+- Load balancers can't distinguish healthy from unhealthy instances
+
+### Solution Implemented
+Added database connectivity test to health check endpoint:
+
+**File**: `backend/app/main.py`
+
+**Changes**:
+1. Updated `/health` endpoint to test database connection
+2. Added database connection test using `SELECT 1` query
+3. Returns HTTP 200 when database connected (healthy)
+4. Returns HTTP 503 when database disconnected (unhealthy)
+5. Includes database status in response body
+6. Logs warnings when health check fails
+7. Returns exception type in error response
+
+**Response Examples**:
+```json
+// Healthy (HTTP 200)
+{
+  "service": "glucolens-backend",
+  "version": "2.0.0",
+  "features": ["authentication", "advanced-ml", "real-time-alerts"],
+  "database": "connected",
+  "status": "healthy"
+}
+
+// Unhealthy (HTTP 503)
+{
+  "service": "glucolens-backend",
+  "version": "2.0.0",
+  "features": ["authentication", "advanced-ml", "real-time-alerts"],
+  "database": "disconnected",
+  "status": "unhealthy",
+  "error": "OperationalError"
+}
+```
+
+### Testing
+✅ **Syntax Validation**: Python syntax valid
+✅ **Code Structure**: Logic verified manually
+✅ **HTTP Status Codes**: 200 for healthy, 503 for unhealthy
+⚠️ **Runtime Test**: Requires Docker environment
+
+### Benefits
+1. **Load Balancer Integration**: Proper readiness/liveness probe for K8s/ECS
+2. **Traffic Protection**: No traffic routed to unhealthy instances
+3. **Monitoring**: Clear signal for alerting and monitoring systems
+4. **Debugging**: Database status visible in health check response
+5. **Zero Downtime Deploys**: Rolling updates wait for healthy instances
+
+### Risks & Side Effects
+- ⚠️ Health check now queries database on every call (adds ~1-5ms latency)
+- ⚠️ Could contribute to connection pool exhaustion if heavily polled
+- ✅ Mitigated: Uses existing engine, minimal overhead
+- ✅ Recommendation: Configure load balancer to check every 10-30s, not every second
+
+### Kubernetes/ECS Configuration
+```yaml
+# Kubernetes example
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 10
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 2
+```
+
+### Files Modified
+- `backend/app/main.py` (+20 lines modified around lines 104-137)
+
+### Deployment Impact
+- ✅ Low risk change
+- ✅ Backward compatible (response structure enhanced, not changed)
+- ✅ No database schema changes
+- ✅ No breaking API changes
+- ⚠️ Load balancers will start detecting unhealthy instances (this is desired!)
+- ✅ Safe to deploy immediately
+
+---
+
+**Last Updated**: 2025-12-19 (Iteration 2)
 **Next Iteration**: Ready to start

@@ -103,13 +103,38 @@ app.add_middleware(
 # Health check
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {
-        "status": "healthy",
+    """
+    Health check endpoint with database connectivity test.
+
+    Returns:
+        200: Service is healthy and database is reachable
+        503: Service is unhealthy (database unreachable)
+    """
+    from fastapi import status
+    from fastapi.responses import JSONResponse
+
+    health_status = {
         "service": "glucolens-backend",
         "version": "2.0.0",
-        "features": ["authentication", "advanced-ml", "real-time-alerts"]
+        "features": ["authentication", "advanced-ml", "real-time-alerts"],
+        "database": "unknown",
+        "status": "unhealthy"
     }
+
+    # Test database connection
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+        health_status["database"] = "connected"
+        health_status["status"] = "healthy"
+        return JSONResponse(content=health_status, status_code=status.HTTP_200_OK)
+
+    except Exception as e:
+        logger.warning(f"Health check failed - database unreachable: {e}")
+        health_status["database"] = "disconnected"
+        health_status["status"] = "unhealthy"
+        health_status["error"] = str(type(e).__name__)
+        return JSONResponse(content=health_status, status_code=status.HTTP_503_SERVICE_UNAVAILABLE)
 
 
 # Include routers
