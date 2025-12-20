@@ -1,0 +1,182 @@
+# Render.com Blueprint Configuration for GlucoLens
+# One-click deployment: https://render.com/deploy?repo=https://github.com/brettleehari/metabolic-story-teller
+
+services:
+  # FastAPI Backend Web Service
+  - type: web
+    name: glucolens-api
+    runtime: docker
+    region: oregon
+    plan: free
+    branch: main
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: glucolens-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: glucolens-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: glucolens-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: glucolens-redis
+          type: redis
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: 30
+      - key: REFRESH_TOKEN_EXPIRE_DAYS
+        value: 7
+      - key: CORS_ORIGINS
+        sync: false  # Set manually in dashboard
+      # ML Configuration
+      - key: MIN_DATA_POINTS_PCMCI
+        value: 50
+      - key: PCMCI_ALPHA_LEVEL
+        value: 0.05
+      - key: PCMCI_MAX_LAG
+        value: 7
+      - key: STUMPY_WINDOW_SIZE
+        value: 288
+      - key: ML_CACHE_TTL
+        value: 3600
+
+  # Celery Worker Service (Background Tasks)
+  - type: worker
+    name: glucolens-celery-worker
+    runtime: docker
+    region: oregon
+    plan: free
+    branch: main
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: celery -A app.tasks worker --loglevel=info --concurrency=2
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: glucolens-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: glucolens-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: glucolens-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: glucolens-redis
+          type: redis
+          property: connectionString
+      - key: SECRET_KEY
+        fromService:
+          name: glucolens-api
+          type: web
+          envVarKey: SECRET_KEY
+
+  # Celery Beat Service (Scheduled Tasks)
+  - type: worker
+    name: glucolens-celery-beat
+    runtime: docker
+    region: oregon
+    plan: free
+    branch: main
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: celery -A app.tasks beat --loglevel=info
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: glucolens-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: glucolens-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          name: glucolens-redis
+          type: redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          name: glucolens-redis
+          type: redis
+          property: connectionString
+
+  # Static Site (React Frontend) - Served from dist/
+  - type: web
+    name: glucolens-frontend
+    runtime: static
+    region: oregon
+    plan: free
+    branch: main
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    pullRequestPreviewsEnabled: true
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-XSS-Protection
+        value: 1; mode=block
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: VITE_API_BASE_URL
+        fromService:
+          name: glucolens-api
+          type: web
+          property: host
+
+databases:
+  # PostgreSQL 16 Database
+  - name: glucolens-db
+    databaseName: glucolens
+    user: glucolens
+    region: oregon
+    plan: free
+    ipAllowList: []  # Allow connections from all Render services
+    # Note: TimescaleDB extension not available on Render's managed PostgreSQL
+    # Consider Supabase or Timescale Cloud for TimescaleDB features
+
+  # Redis Cache & Task Queue
+  - name: glucolens-redis
+    region: oregon
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
