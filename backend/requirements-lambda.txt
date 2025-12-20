@@ -2,9 +2,9 @@
 # Optimized for cold starts and minimal package size
 
 # Core FastAPI (minimal)
-fastapi==0.104.1
-pydantic==2.5.0
-pydantic-settings==2.1.0
+fastapi==0.125.0
+pydantic==2.12.5
+pydantic-settings==2.12.0
 
 # Lambda integration
 mangum==0.17.0
