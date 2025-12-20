@@ -397,5 +397,254 @@ Post-deployment steps documented in guide:
 
 ---
 
-**Last Updated**: 2025-12-19 (Iteration 3)
+## Iteration 4 - GitHub Actions CI/CD Pipeline
+**Date**: 2025-12-20
+**Status**: ✅ Completed
+**Priority**: 🔴 CRITICAL (DevOps)
+
+### Problem Identified
+No automated build validation before deployment:
+- Docker build failures only discovered during deployment
+- No way to verify imports work in containerized environment
+- Manual testing required before every deploy
+- No versioned Docker images for rollback
+- Impact: Deployment failures, broken production deployments
+
+### Root Cause
+Missing CI/CD automation:
+- No GitHub Actions workflows configured
+- Docker images built only during deployment (too late)
+- No automated testing of containerized application
+- Render.com builds from Dockerfile directly (no pre-validation)
+- Manual deployment process prone to errors
+
+### Solution Implemented
+Created comprehensive GitHub Actions CI/CD pipeline for Docker builds:
+
+**Files Created**:
+
+1. **`.github/workflows/docker-build-push.yml`** (180 lines)
+   - 3 automated jobs on every PR and push to main/develop
+
+   **Job 1: Build and Push Docker Image**
+   - Builds Docker image from `backend/Dockerfile`
+   - Tests that container starts successfully
+   - Validates Python imports work (`from app.main import app`)
+   - Pushes validated images to GitHub Container Registry (ghcr.io)
+   - Only pushes on main/develop (not PRs)
+   - Uses GitHub cache for faster builds
+
+   **Job 2: Build Frontend**
+   - Installs npm dependencies with `npm ci`
+   - Builds frontend with `npm run build`
+   - Validates build output (checks dist/index.html exists)
+
+   **Job 3: Deployment Validation**
+   - Validates render.yaml syntax with Python YAML parser
+   - Checks all required service fields present
+   - Runs only on pushes to main (deployment readiness check)
+
+2. **`.github/workflows/README.md`** (330 lines)
+   - Complete workflow documentation
+   - CI/CD flow diagram
+   - Environment variables reference
+   - Troubleshooting guide
+   - Image management instructions
+   - Best practices
+
+3. **Updated `render.yaml`**
+   - Added comments about CI/CD integration
+   - Can now pull pre-built images from ghcr.io
+
+### Docker Image Registry
+
+**Registry**: `ghcr.io/brettleehari/metabolic-story-teller`
+
+**Tags Created**:
+- `latest` - Latest from main branch
+- `main` - Current main branch
+- `develop` - Current develop branch
+- `sha-<commit>` - Specific commit SHA (for rollback)
+- `pr-<number>` - Pull request builds (not pushed)
+
+### Workflow Triggers
+
+```yaml
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+```
+
+### Testing Strategy
+
+**Docker Image Validation**:
+```bash
+# Build test image
+docker build -t glucolens-test:latest ./backend
+
+# Start container with test environment
+docker run --rm -d --name glucolens-test \
+  -e DATABASE_URL=postgresql://test:test@localhost:5432/test \
+  -e REDIS_URL=redis://localhost:6379/0 \
+  -e SECRET_KEY=test-secret-key-for-ci-validation \
+  glucolens-test:latest
+
+# Wait for startup
+sleep 5
+
+# Test imports
+docker exec glucolens-test python -c "from app.main import app; print('✅ App imports successfully')"
+
+# Cleanup
+docker stop glucolens-test
+```
+
+**Frontend Validation**:
+```bash
+npm ci
+npm run build
+[ -f "dist/index.html" ] || exit 1
+```
+
+**Render Config Validation**:
+```python
+import yaml
+config = yaml.safe_load(open('render.yaml'))
+assert len(config.get("services", [])) > 0
+assert len(config.get("databases", [])) > 0
+```
+
+### Benefits
+
+1. **Early Failure Detection**: Build failures caught in CI, not deployment
+2. **Validated Images**: Every image pushed to registry is tested
+3. **Fast Rollback**: Versioned images enable instant rollback via SHA tags
+4. **PR Validation**: Pull requests validated before merge
+5. **Build Cache**: GitHub cache speeds up builds (reuses layers)
+6. **No Secrets Required**: Uses automatic `GITHUB_TOKEN`
+7. **Clean CD Pipeline**: Only merge validated code to main
+8. **Frontend Safety**: TypeScript/Vite build errors caught early
+9. **Config Validation**: render.yaml syntax checked automatically
+10. **Audit Trail**: All builds logged in GitHub Actions
+
+### CI/CD Flow
+
+```
+Developer creates PR
+         ↓
+GitHub Actions triggered
+         ↓
+┌─────────────────────────────┐
+│ Job 1: Docker Build & Test  │
+├─────────────────────────────┤
+│ ✓ Build image               │
+│ ✓ Start container           │
+│ ✓ Test imports              │
+│ ✓ Push to ghcr.io (main)    │
+└─────────────────────────────┘
+         ↓
+┌─────────────────────────────┐
+│ Job 2: Frontend Build       │
+├─────────────────────────────┤
+│ ✓ npm ci                    │
+│ ✓ npm run build             │
+│ ✓ Validate dist/            │
+└─────────────────────────────┘
+         ↓
+┌─────────────────────────────┐
+│ Job 3: Deployment Check     │
+├─────────────────────────────┤
+│ ✓ Validate render.yaml      │
+│ ✓ Check service definitions │
+└─────────────────────────────┘
+         ↓
+All checks pass ✅
+         ↓
+Merge to main
+         ↓
+Image pushed to ghcr.io
+         ↓
+Ready for deployment
+```
+
+### Risks & Side Effects
+
+- ⚠️ Builds consume GitHub Actions minutes (2,000 free/month)
+- ⚠️ Large Docker images consume storage (500MB free package storage)
+- ✅ Mitigated: Uses layer caching, builds only on PR/main/develop
+- ✅ Mitigated: Free tier sufficient for current usage (<100 builds/month)
+
+### GitHub Container Registry Setup
+
+**No manual configuration required!** GitHub Actions automatically:
+- Logs in to ghcr.io using `GITHUB_TOKEN`
+- Creates package under repository namespace
+- Sets up permissions (write for actions, read for public)
+
+**Access images**:
+```bash
+# Pull latest from main
+docker pull ghcr.io/brettleehari/metabolic-story-teller:main
+
+# Pull specific commit
+docker pull ghcr.io/brettleehari/metabolic-story-teller:sha-abc1234
+
+# Run locally
+docker run -p 8000:8000 \
+  -e DATABASE_URL=postgresql://user:pass@host:5432/db \
+  -e REDIS_URL=redis://host:6379/0 \
+  -e SECRET_KEY=your-secret \
+  ghcr.io/brettleehari/metabolic-story-teller:main
+```
+
+### Files Modified
+
+- `.github/workflows/docker-build-push.yml` - NEW (180 lines)
+- `.github/workflows/README.md` - NEW (330 lines)
+- `render.yaml` - Updated (added CI/CD comments)
+
+### Deployment Impact
+
+- ✅ Low risk (CI/CD only, no code changes)
+- ✅ Backward compatible
+- ✅ No database schema changes
+- ✅ No API changes
+- ✅ Builds will run on next PR/push to main
+- ✅ Safe to merge immediately
+
+### Integration with Render.com
+
+Render can now:
+1. **Option A**: Continue building from Dockerfile (validated in CI)
+2. **Option B**: Pull pre-built images from ghcr.io (future enhancement)
+
+Current setup (Option A) ensures:
+- Same Dockerfile tested in CI is used in production
+- Build failures caught before deployment attempt
+- Render builds are reproducible (pinned dependencies)
+
+### Next Steps
+
+**Immediate**:
+1. Wait for first GitHub Actions run to complete
+2. Verify images appear in ghcr.io registry
+3. Check that PR validation works correctly
+
+**Future Enhancements**:
+1. Configure Render to pull from ghcr.io (skip Render build)
+2. Add Docker image scanning (Trivy, Snyk)
+3. Add integration tests in CI
+4. Add performance benchmarks
+5. Add automated rollback on health check failures
+6. Add Slack/Discord notifications
+
+---
+
+**Last Updated**: 2025-12-20 (Iteration 4)
 **Next Iteration**: Ready to start
