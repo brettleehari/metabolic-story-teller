@@ -1,5 +1,14 @@
 # Render.com Blueprint Configuration for GlucoLens
 # One-click deployment: https://render.com/deploy?repo=https://github.com/brettleehari/metabolic-story-teller
+#
+# CI/CD Pipeline:
+# - Every PR/push to main triggers GitHub Actions workflow
+# - Builds and tests Docker image in CI
+# - Pushes validated image to ghcr.io/brettleehari/metabolic-story-teller
+# - Render pulls from same Dockerfile that CI already validated
+# - This ensures deployment will succeed (CI catches build failures early)
+#
+# Pre-built images available at: ghcr.io/brettleehari/metabolic-story-teller:main
 
 services:
   # FastAPI Backend Web Service

@@ -1,0 +1,179 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-push:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: false
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test Docker image
+        run: |
+          # Build a test image
+          docker build -t glucolens-test:latest ./backend
+
+          # Test that image can start
+          docker run --rm -d --name glucolens-test \
+            -e DATABASE_URL=postgresql://test:test@localhost:5432/test \
+            -e REDIS_URL=redis://localhost:6379/0 \
+            -e SECRET_KEY=test-secret-key-for-ci-validation \
+            -e CELERY_BROKER_URL=redis://localhost:6379/0 \
+            -e CELERY_RESULT_BACKEND=redis://localhost:6379/0 \
+            -p 8000:8000 \
+            glucolens-test:latest
+
+          # Wait for startup
+          sleep 5
+
+          # Test that main module imports successfully
+          docker exec glucolens-test python -c "from app.main import app; print('✅ App imports successfully')"
+
+          # Stop test container
+          docker stop glucolens-test
+
+          echo "✅ Docker image validation passed"
+
+      - name: Push Docker image to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Image digest
+        if: github.event_name != 'pull_request'
+        run: echo "Image pushed with digest: ${{ steps.meta.outputs.digest }}"
+
+  # Optional: Also build frontend if needed
+  build-frontend:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+        env:
+          VITE_API_BASE_URL: https://glucolens-api.onrender.com
+
+      - name: Test build output
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "❌ Build failed - dist directory not found"
+            exit 1
+          fi
+
+          if [ ! -f "dist/index.html" ]; then
+            echo "❌ Build failed - index.html not found"
+            exit 1
+          fi
+
+          echo "✅ Frontend build successful"
+
+  # Validate deployment readiness
+  deployment-validation:
+    name: Deployment Validation
+    needs: [build-and-push, build-frontend]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate render.yaml
+        run: |
+          python3 -c "
+          import yaml
+
+          with open('render.yaml', 'r') as f:
+              config = yaml.safe_load(f)
+
+          print('✅ render.yaml is valid YAML')
+          print(f'✅ Services: {len(config.get(\"services\", []))}')
+          print(f'✅ Databases: {len(config.get(\"databases\", []))}')
+
+          # Validate required fields
+          for service in config.get('services', []):
+              assert 'name' in service, f'Service missing name: {service}'
+              assert 'type' in service, f'Service missing type: {service}'
+              print(f'  ✓ {service[\"name\"]} ({service[\"type\"]})')
+          "
+
+      - name: Deployment ready
+        run: |
+          echo "✅ All validation checks passed"
+          echo "✅ Ready to deploy to Render.com"
+          echo ""
+          echo "Docker image: ghcr.io/${{ github.repository }}:main"
+          echo "Deploy URL: https://render.com/deploy?repo=https://github.com/${{ github.repository }}"
