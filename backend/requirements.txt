@@ -26,13 +26,13 @@ python-multipart==0.0.6
 bcrypt==4.1.1
 
 # ML & Pattern Discovery
-tigramite==5.2.4.1  # PCMCI causal discovery
-stumpy==1.12.0  # Matrix profile for recurring patterns
-mlxtend==0.23.0  # Association rules mining
-pandas==2.1.3
-numpy==1.26.2
+tigramite==5.2.9.4  # PCMCI causal discovery
+stumpy==1.13.0  # Matrix profile for recurring patterns
+mlxtend==0.24.0  # Association rules mining
+pandas==2.3.3
+numpy==2.3.5
 scipy==1.11.4
-scikit-learn==1.3.2
+scikit-learn==1.8.0
 
 # HuggingFace Models (MOMENT)
 # Note: momentfm is experimental - uncomment when ready for MVP2
@@ -41,8 +41,8 @@ scikit-learn==1.3.2
 # transformers==4.35.2
 
 # Data Processing
-pandas==2.1.3
-numpy==1.26.2
+pandas==2.3.3
+numpy==2.3.5
 python-dateutil==2.8.2
 pytz==2023.3
 
