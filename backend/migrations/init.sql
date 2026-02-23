@@ -1,8 +1,15 @@
 -- GlucoLens Database Initialization Script
--- This script creates all tables and sets up TimescaleDB hypertables
+-- Works on both TimescaleDB (local Docker) and standard PostgreSQL (Render)
 
--- Enable TimescaleDB extension
-CREATE EXTENSION IF NOT EXISTS timescaledb;
+-- Try to enable TimescaleDB extension (fails gracefully on standard PostgreSQL)
+DO $$
+BEGIN
+    CREATE EXTENSION IF NOT EXISTS timescaledb;
+    RAISE NOTICE 'TimescaleDB extension enabled';
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'TimescaleDB not available - using standard PostgreSQL';
+END $$;
 
 -- ==================== USERS TABLE ====================
 
@@ -34,10 +41,16 @@ CREATE TABLE IF NOT EXISTS glucose_readings (
     PRIMARY KEY (id, timestamp)
 );
 
--- Convert to hypertable
-SELECT create_hypertable('glucose_readings', 'timestamp', if_not_exists => TRUE);
+-- Try to convert to hypertable (only works with TimescaleDB)
+DO $$
+BEGIN
+    PERFORM create_hypertable('glucose_readings', 'timestamp', if_not_exists => TRUE);
+    RAISE NOTICE 'glucose_readings hypertable created';
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Skipping hypertable for glucose_readings (TimescaleDB not available)';
+END $$;
 
--- Indexes
 CREATE INDEX IF NOT EXISTS idx_glucose_user_time ON glucose_readings (user_id, timestamp DESC);
 
 -- Sleep data
@@ -58,7 +71,14 @@ CREATE TABLE IF NOT EXISTS sleep_data (
     PRIMARY KEY (id, sleep_start)
 );
 
-SELECT create_hypertable('sleep_data', 'sleep_start', if_not_exists => TRUE);
+DO $$
+BEGIN
+    PERFORM create_hypertable('sleep_data', 'sleep_start', if_not_exists => TRUE);
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Skipping hypertable for sleep_data';
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_sleep_user_date ON sleep_data (user_id, date DESC);
 
 -- Activities
@@ -76,7 +96,14 @@ CREATE TABLE IF NOT EXISTS activities (
     PRIMARY KEY (id, timestamp)
 );
 
-SELECT create_hypertable('activities', 'timestamp', if_not_exists => TRUE);
+DO $$
+BEGIN
+    PERFORM create_hypertable('activities', 'timestamp', if_not_exists => TRUE);
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Skipping hypertable for activities';
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_activities_user_time ON activities (user_id, timestamp DESC);
 
 -- Meals
@@ -97,7 +124,14 @@ CREATE TABLE IF NOT EXISTS meals (
     PRIMARY KEY (id, timestamp)
 );
 
-SELECT create_hypertable('meals', 'timestamp', if_not_exists => TRUE);
+DO $$
+BEGIN
+    PERFORM create_hypertable('meals', 'timestamp', if_not_exists => TRUE);
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Skipping hypertable for meals';
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_meals_user_time ON meals (user_id, timestamp DESC);
 
 -- ==================== ANALYTICS TABLES ====================

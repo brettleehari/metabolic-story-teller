@@ -67,11 +67,9 @@ async def lifespan(app: FastAPI):
         logger.error(f"❌ Failed to connect to database after retries: {e}")
         raise
 
-    # Create tables (in production, use Alembic migrations)
+    # Create tables (idempotent - safe for production)
     async with engine.begin() as conn:
-        # Note: Uncomment this for initial development
-        # await conn.run_sync(Base.metadata.create_all)
-        pass
+        await conn.run_sync(Base.metadata.create_all)
 
     logger.info("✅ GlucoLens Backend Ready")
     yield

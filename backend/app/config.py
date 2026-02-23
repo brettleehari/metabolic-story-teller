@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     # Database
     DATABASE_URL: str
-    DB_PASSWORD: str
+    DB_PASSWORD: str = ""
 
     # Redis
     REDIS_URL: str

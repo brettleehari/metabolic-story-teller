@@ -46,10 +46,12 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql://glucolens:${DB_PASSWORD:-glucolens_dev_password}@timescaledb:5432/glucolens
+      DB_PASSWORD: ${DB_PASSWORD:-glucolens_dev_password}
       REDIS_URL: redis://redis:6379/0
       SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080,http://localhost:5173,http://localhost:3000}
       DEBUG: "true"
     depends_on:
       timescaledb:
@@ -69,8 +71,10 @@ services:
     environment:
       DATABASE_URL: postgresql://glucolens:${DB_PASSWORD:-glucolens_dev_password}@timescaledb:5432/glucolens
       REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080,http://localhost:5173,http://localhost:3000}
     depends_on:
       - redis
       - timescaledb
@@ -87,8 +91,10 @@ services:
     environment:
       DATABASE_URL: postgresql://glucolens:${DB_PASSWORD:-glucolens_dev_password}@timescaledb:5432/glucolens
       REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:8080,http://localhost:5173,http://localhost:3000}
     depends_on:
       - redis
     restart: unless-stopped
